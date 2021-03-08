@@ -22,6 +22,7 @@ color_path = NowDate.strftime('%Y-%m-%d_%H%M_'+'.png')
 # 5.2 blur(gaussian or bilateral) and edge detection
 # 5.3 edge detection (sobel,sharr,raplacian,canny)
 #
+
 def get_distance(x,y):
     pipeline = rs.pipeline()
     config = rs.config()
@@ -108,8 +109,7 @@ def stream(depth,height,width,count):
     config = rs.config()
     config.enable_stream(rs.stream.depth, 848, 480, rs.format.z16, 30)
     config.enable_stream(rs.stream.color, 848, 480, rs.format.bgr8, 30)
-
-
+    #0~~65000
     # Start streaming
     profile= pipeline.start(config)
 
@@ -122,7 +122,7 @@ def stream(depth,height,width,count):
     #value setting
     shelf_depth=0.45
     max_distance = 1 + shelf_depth
-    object_min_distance = 0.8
+    object_min_distance = 1
     object_width=width
     object_height=height
     object_depth=depth
@@ -133,6 +133,7 @@ def stream(depth,height,width,count):
     blk_size=9
     C=5
     clahe = cv2.createCLAHE(clipLimit=2, tileGridSize=(30,30))
+#    kernel_sharpen_3 = np.array([[-1,-1,-1,-1,-1],[-1,2,2,2,-1],[-1,2,8,2,-1],[-1,2,2,2,-1],[-1,-1,-1,-1,-1]])/8.0
     kernel_3=cv2.getStructuringElement(cv2.MORPH_RECT,(3,3))
     kernel_11 = np.ones((5, 5), np.uint8)
     print('clipping_distance: =='+str(clipping_distance))
@@ -147,7 +148,7 @@ def stream(depth,height,width,count):
     colorizer.set_option(rs.option.min_distance, object_min_distance)
     colorizer.set_option(rs.option.max_distance, max_distance)
     
-    # print(kernel_3)
+    print(kernel_3)
     #aligned
     
     align_to = rs.stream.color
@@ -158,7 +159,7 @@ def stream(depth,height,width,count):
 
             # Wait for a coherent pair of frames: depth and color
             frames = pipeline.wait_for_frames()
-            # print('frame')
+            print('frame')  
             aligned_frames = align.process(frames)
 
             color_frame = frames.get_color_frame()
@@ -166,9 +167,9 @@ def stream(depth,height,width,count):
             filtered = hole_filling.process(aligned_depth_frame)
             filtered = threshold_filling.process(filtered)
             if not aligned_depth_frame or not color_frame:
-                # print('not error')
+                print('not error')
                 continue
-            # print('a')
+            print('a')
 
             # Convert images to numpy arrays
             depth_image = np.asanyarray(filtered.get_data())
@@ -189,8 +190,8 @@ def stream(depth,height,width,count):
             # print(depth_image[433:434,241:242])
             # print('depth_scale :       ',str(depth_scale))
             # print(depth_image.dtype)
-            asdf=aligned_depth_frame.get_distance(438, 290)
-            print('box_distance:'+str(asdf)+'----------------')
+            asdf=aligned_depth_frame.get_distance(433, 241)
+            # print(asdf)
             sobelx=cv2.Sobel(depth_colormap,-1,1,0,ksize=3)
             sobely=cv2.Sobel(depth_colormap,-1,0,1,ksize=3)
             # cv2.imshow('sobelx',sobelx)
@@ -303,7 +304,7 @@ def stream(depth,height,width,count):
 
                     # print(dist_to_center)
 
-            # print('object 갯수:'+ str(total))
+            print('object 갯수:'+ str(total))
 
 
             contours_d, hierarchy_d = cv2.findContours(th2_depth, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
@@ -411,7 +412,7 @@ def stream(depth,height,width,count):
 
             # elif i==30:
             #     break
-            # print(i)
+            print(i)
             #
             # elif i==30:
 
@@ -440,6 +441,7 @@ if __name__== "__main__":
     ob1=object()
     middle_box=object()
     ob3=object()
+
     #small_box = isinstance(ob1, object)
     middle_box_bool = isinstance(middle_box, object)
     # large_box = isinstance(ob3, object)
@@ -447,6 +449,16 @@ if __name__== "__main__":
     if middle_box_bool:
 
         middle_box.width,middle_box.depth,middle_box.height,middle_box.count = 27,18,15,0 #unit:cm
-        stream(middle_box.width,middle_box.depth,middle_box.height,middle_box.count)
-        # get_distance(438, 290)
+        #stream(middle_box.width,middle_box.depth,middle_box.height,middle_box.count)
+        get_distance(438, 290)
         # stream(ob1.depth,ob1.height,ob1.width,ob1.count)
+
+    #
+    # elif b:
+    #     ob2.depth,ob2.height,ob2.width,ob2.count = 19,9,22,0
+    #
+    #     stream(ob2.depth, ob2.height, ob2.width, ob2.count)
+    # elif c:
+    #     ob3.depth,ob3.height,ob3.width,ob3.count = 26,21.5,39.5,0
+    #     stream(ob3.depth, ob3.height, ob3.width, ob3.count)
+
