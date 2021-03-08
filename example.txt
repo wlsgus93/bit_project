@@ -1,0 +1,17 @@
+object_code='A001',count=3,object_name='box_1',place='R-1',time=20210224
+object_code='A001',count=4,object_name='box_1',place='R-2',time=20210224
+object_code='A002',count=4,object_name='box_2',place='R-3',time=20210224
+object_code='A003',count=5,object_name='tape',place='R-4',time=20210224
+
+이렇게 넘겨준다치면
+
+일단 라인으로한줄씩
+f = open("/test.txt", 'r')
+while True:
+    line = f.readline()
+    if not line: break
+    print(line)
+    line.split(',')    
+f.close()
+
+
