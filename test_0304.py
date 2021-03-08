@@ -28,7 +28,78 @@ def get_distance(x,y):
     config.enable_stream(rs.stream.depth, 848, 480, rs.format.z16, 30)
     config.enable_stream(rs.stream.color, 848, 480, rs.format.bgr8, 30)
     profile = pipeline.start(config)
-    a= numpy.array([])
+    depth_sensor = profile.get_device().first_depth_sensor()
+    depth_scale = depth_sensor.get_depth_scale()
+
+    shelf_depth = 0.45
+    max_distance = 1 + shelf_depth
+    object_min_distance = 0.8
+    # object_width = width
+    # object_height = height
+    # object_depth = depth
+    clipping_distance_in_meters = max_distance + shelf_depth  # unit : meter
+    clipping_distance_in_meters_2 = object_min_distance
+    clipping_distance = clipping_distance_in_meters / depth_scale
+    clipping_distance_2 = clipping_distance_in_meters_2 / depth_scale
+    hole_filling = rs.hole_filling_filter()
+    threshold_filling = rs.threshold_filter(object_min_distance, max_distance)
+    colorizer = rs.colorizer()
+    colorizer.set_option(rs.option.visual_preset, 1)  # 0=Dynamic, 1=Fixed, 2=Near, 3=Far
+    colorizer.set_option(rs.option.min_distance, object_min_distance)
+    colorizer.set_option(rs.option.max_distance, max_distance)
+
+    # print(kernel_3)
+    # aligned
+
+    align_to = rs.stream.color
+    align = rs.align(align_to)
+    i = 0
+    try:
+        while True:
+
+            # Wait for a coherent pair of frames: depth and color
+            frames = pipeline.wait_for_frames()
+            # print('frame')
+            aligned_frames = align.process(frames)
+
+
+            aligned_depth_frame = aligned_frames.get_depth_frame()
+            filtered = hole_filling.process(aligned_depth_frame)
+            filtered = threshold_filling.process(filtered)
+            if not aligned_depth_frame:
+                # print('not error')
+                continue
+
+
+            # Convert images to numpy arrays
+            depth_image = np.asanyarray(filtered.get_data())
+
+
+            depth_colormap = np.asanyarray(colorizer.colorize(filtered).get_data())
+            depth_image_3d = np.dstack(
+                (depth_image, depth_image, depth_image))  # depth image is 1 channel, color is 3 channels
+            depth_image_3d_1 = np.asanyarray(colorizer.colorize(filtered).get_data())
+
+            cv2.circle(depth_image_3d_1, (433, 241), 3, (0, 0, 255))
+            depth_image_3d_1 = cv2.cvtColor(depth_image_3d_1, cv2.COLOR_BGR2GRAY)
+            # cv2.imshow('depth_image_3d',depth_image_3d_1)
+
+            # asdf = aligned_depth_frame.get_distance(x, y)
+            # print('distance : '+str(asdf))
+            #a=[]
+            total=0
+            for i in range(x-1,x+2,1):
+                for j in range(y-1,y+2,1):
+                    #a.append(aligned_depth_frame.get_distance(i, j))
+                    total+=aligned_depth_frame.get_distance(i, j)
+            mean=total/9
+            print(mean)
+    finally:
+
+        # Stop streaming
+
+        pipeline.stop()
+        print('pipe stop')
 
 
 # Configure depth and color streams
@@ -72,7 +143,7 @@ def stream(depth,height,width,count):
     hole_filling = rs.hole_filling_filter()
     threshold_filling=rs.threshold_filter(object_min_distance,max_distance)
     colorizer = rs.colorizer()
-    colorizer.set_option(rs.option.visual_preset, 3) # 0=Dynamic, 1=Fixed, 2=Near, 3=Far
+    colorizer.set_option(rs.option.visual_preset, 1) # 0=Dynamic, 1=Fixed, 2=Near, 3=Far
     colorizer.set_option(rs.option.min_distance, object_min_distance)
     colorizer.set_option(rs.option.max_distance, max_distance)
     
@@ -336,7 +407,7 @@ def stream(depth,height,width,count):
             if i%20==1:
 
                 cv2.imwrite('img1/' +'_'+ str(i)+'.png', color_image)
-                cv2.imwrite('img1/' +'_depth'+ str(i)+'.png', depth_colormap)
+                # cv2.imwrite('img1/' +'_depth'+ str(i)+'.png', depth_colormap)
 
             # elif i==30:
             #     break
@@ -377,5 +448,5 @@ if __name__== "__main__":
 
         middle_box.width,middle_box.depth,middle_box.height,middle_box.count = 27,18,15,0 #unit:cm
         stream(middle_box.width,middle_box.depth,middle_box.height,middle_box.count)
-
+        # get_distance(438, 290)
         # stream(ob1.depth,ob1.height,ob1.width,ob1.count)
