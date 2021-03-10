@@ -2,15 +2,13 @@
 import pyrealsense2 as rs
 import numpy as np
 import cv2
-# import PIL
-# from PIL import Image
 from time import sleep
-import threading
 import datetime
 
 #import matplotlib.pyplot as plt
 #import matplotlib.image as mpimg
 video_strime=True
+
 NowDate = datetime.datetime.now()
 color_path = NowDate.strftime('%Y-%m-%d_%H%M_'+'.png')
 # 1. set max or min distance
@@ -19,10 +17,32 @@ color_path = NowDate.strftime('%Y-%m-%d_%H%M_'+'.png')
 # 4. delete bg
 # 5. image processing
 # 5.1 convert color, ad_threshhold ,
-# 5.2 blur(gaussian or bilateral) and edge detection
-# 5.3 edge detection (sobel,sharr,raplacian,canny)
+# 5.2 blur(bilateral) and edge detection
+# 5.3 edge detection (mopology,canny)
 #
 
+
+def crop(color_image,depth_colormap,bg_removed,box_model):
+    pass
+
+
+def mask(color_image,depth_colormap): #input image
+    #cv2.imshow('mask',mask)
+    ########################################make mask Bitwise_and
+    mask_img = np.zeros_like(color_image)
+    mask_img = cv2.rectangle(mask_img, (170, 0), (750, 700), (255, 255, 255), -1)  # same height between object and camera
+    # cv2.imshow('mask',mask_img)
+    # bg_removed = cv2.bitwise_and(bg_removed, mask_img)
+    color_image = cv2.bitwise_and(color_image, mask_img)
+    depth_colormap = cv2.bitwise_and(depth_colormap, mask_img)
+    return color_image,depth_colormap
+def blur(color_image,depth_colormap):
+    blur = cv2.bilateralFilter(color_gray, 10, 10, 10)
+    blur_depth = cv2.bilateralFilter(bg_removed, 10, 10, 10)
+    cv2.imshow('2', blur)
+    return color_image, blur_depth
+
+# def
 def get_distance(x,y):
     pipeline = rs.pipeline()
     config = rs.config()
@@ -32,9 +52,11 @@ def get_distance(x,y):
     depth_sensor = profile.get_device().first_depth_sensor()
     depth_scale = depth_sensor.get_depth_scale()
 
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    img2 = clahe.apply(img)
     shelf_depth = 0.45
     max_distance = 1 + shelf_depth
-    object_min_distance = 0.8
+    object_min_distance = 0.7
     # object_width = width
     # object_height = height
     # object_depth = depth
@@ -60,14 +82,12 @@ def get_distance(x,y):
 
             # Wait for a coherent pair of frames: depth and color
             frames = pipeline.wait_for_frames()
-            # print('frame')
             aligned_frames = align.process(frames)
-
 
             aligned_depth_frame = aligned_frames.get_depth_frame()
             filtered = hole_filling.process(aligned_depth_frame)
             filtered = threshold_filling.process(filtered)
-            if not aligned_depth_frame:
+            if not aligned_depth_frame or not color_frame:
                 # print('not error')
                 continue
 
@@ -109,7 +129,8 @@ def stream(depth,height,width,count):
     config = rs.config()
     config.enable_stream(rs.stream.depth, 848, 480, rs.format.z16, 30)
     config.enable_stream(rs.stream.color, 848, 480, rs.format.bgr8, 30)
-    #0~~65000
+    #0~~65000d = np.where((depth_image_3d > clipping_distance_max) | (depth_image_3d <= clipping_distance_min), grey_color, color_image)
+
     # Start streaming
     profile= pipeline.start(config)
 
@@ -118,27 +139,29 @@ def stream(depth,height,width,count):
     # Getting the depth sensor's depth scale (see rs-align example for explanation)
     depth_sensor = profile.get_device().first_depth_sensor()
     depth_scale = depth_sensor.get_depth_scale()
+    # print(depth_scale)
 
-    #value setting
+    #value setting (unit:meter)
     shelf_depth=0.45
-    max_distance = 1 + shelf_depth
-    object_min_distance = 1
+    object_min_distance = 0.7
+    max_distance = object_min_distance + shelf_depth
+
     object_width=width
     object_height=height
     object_depth=depth
-    clipping_distance_in_meters = max_distance+shelf_depth # unit : meter
+    clipping_distance_in_meters = max_distance # unit : meter
     clipping_distance_in_meters_2= object_min_distance
-    clipping_distance = clipping_distance_in_meters / depth_scale
-    clipping_distance_2=clipping_distance_in_meters_2/depth_scale
+    clipping_distance_front = object_min_distance / depth_scale
+    clipping_distance_behind=max_distance/depth_scale
     blk_size=9
     C=5
     clahe = cv2.createCLAHE(clipLimit=2, tileGridSize=(30,30))
-#    kernel_sharpen_3 = np.array([[-1,-1,-1,-1,-1],[-1,2,2,2,-1],[-1,2,8,2,-1],[-1,2,2,2,-1],[-1,-1,-1,-1,-1]])/8.0
-    kernel_3=cv2.getStructuringElement(cv2.MORPH_RECT,(3,3))
-    kernel_11 = np.ones((5, 5), np.uint8)
-    print('clipping_distance: =='+str(clipping_distance))
-    print(clipping_distance_2)
-    print(depth_scale)
+    kernel_3_2=cv2.getStructuringElement(cv2.MORPH_RECT,(3,3))
+    kernel_5 = np.ones((5, 5), np.uint8)
+    kernel_3 = np.ones((3, 3), np.uint8)
+    # print('clipping_distance: =='+str(clipping_distance))
+    # print(clipping_distance_2)
+    # print(depth_scale)
 
     #depth sensor setup
     hole_filling = rs.hole_filling_filter()
@@ -148,7 +171,7 @@ def stream(depth,height,width,count):
     colorizer.set_option(rs.option.min_distance, object_min_distance)
     colorizer.set_option(rs.option.max_distance, max_distance)
     
-    print(kernel_3)
+
     #aligned
     
     align_to = rs.stream.color
@@ -159,7 +182,6 @@ def stream(depth,height,width,count):
 
             # Wait for a coherent pair of frames: depth and color
             frames = pipeline.wait_for_frames()
-            print('frame')  
             aligned_frames = align.process(frames)
 
             color_frame = frames.get_color_frame()
@@ -167,116 +189,100 @@ def stream(depth,height,width,count):
             filtered = hole_filling.process(aligned_depth_frame)
             filtered = threshold_filling.process(filtered)
             if not aligned_depth_frame or not color_frame:
-                print('not error')
                 continue
-            print('a')
 
             # Convert images to numpy arrays
             depth_image = np.asanyarray(filtered.get_data())
             color_image = np.asanyarray(color_frame.get_data())
-
             # print(depth_image)
             depth_colormap = np.asanyarray(colorizer.colorize(filtered).get_data())
-            depth_image_3d = np.dstack((depth_image, depth_image, depth_image))  # depth image is 1 channel, color is 3 channels
-            depth_image_3d_1=np.asanyarray(colorizer.colorize(filtered).get_data())
-        #    cv2.imshow('depth_image',depth_image)
-#            cv2.imshow('depth_image_3d',depth_image_3)
-            cv2.circle(depth_image_3d_1, (433, 241), 3, (0, 0, 255))
-            depth_image_3d_1= cv2.cvtColor(depth_image_3d_1, cv2.COLOR_BGR2GRAY)
-            #cv2.imshow('depth_image_3d',depth_image_3d_1)
 
-            # print((depth_image_3d_1[433:434, 241:242, :]))
-            # print(depth_image_3d[433:434,241:242,:])
-            # print(depth_image[433:434,241:242])
-            # print('depth_scale :       ',str(depth_scale))
-            # print(depth_image.dtype)
-            asdf=aligned_depth_frame.get_distance(433, 241)
-            # print(asdf)
-            sobelx=cv2.Sobel(depth_colormap,-1,1,0,ksize=3)
-            sobely=cv2.Sobel(depth_colormap,-1,0,1,ksize=3)
-            # cv2.imshow('sobelx',sobelx)
-            # cv2.imshow('sobely',sobely)
-            sobol_m=np.vstack((sobelx,sobely))
-            # cv2.imshow('merged',sobelx+sobely)
-            # cv2.imshow('depth_image_3d_1',depth_image_3d_1)
-            # print(depth_image_3d[247:248,247:248,:])
-            
 
-            # cv2.imshow('depth_colormap',depth_colormap)
+
 
             #Apply colormap on depth image (image must be converted to 8-bit per pixel first)
-            # depth_colormap_apply = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
-            bg_removed = np.where((depth_image_3d > clipping_distance) | (depth_image_3d <= clipping_distance_2),depth_colormap,
-                                  color_image)
-            # cv2.imshow('depth_colormap_apply',depth_colormap_apply)
-            #cv2.imshow('bg_removed',bg_removed)
-            # print('depth image:' + str(depth_image.shape))
-            # print('depth_3d image:' + str(depth_image_3d.shape))
-            # print(bg_removed.shape)
-            # bgr_gray=cv2.cvtColor(bg_removed,cv2.COLOR_BGR2GRAY)
-            depth_image_show=False
-            depth_colormap_show=False
-    ################image processing
-            # cv2.imshow('bg_removed',bg_removed)
-            #make mask Bitwise_and
-            mask_img = np.zeros_like(color_image)
-            mask_img = cv2.rectangle(mask_img,(170,0),(700,700),(255,255,255),-1) #same height between object and camera
-            # cv2.imshow('mask',mask_img)
-            dist_to_center_down = aligned_depth_frame.get_distance(437,232)
-            # print(dist_to_center_down)
-            bg_removed=cv2.bitwise_and(bg_removed, mask_img)
-            color_image = cv2.bitwise_and(color_image, mask_img)
-            depth_colormap = cv2.bitwise_and(depth_colormap, mask_img)
-           # for i in range(0,840,10):
-            #	cv2.line(color_image,(i,470),(i,480),(0,0,255),2)
-            #for i in range(0,480,10):
-            #	cv2.line(color_image,(0,i),(10,i),(0,0,255),2)
-            #cv2.line(color_image,(10,470),(10,480),(0,0,255),2)
-            #cv2.line(color_image,(20,470),(10,480),(0,0,255),2) 
-            #cv2.line(color_image,(10,470),(10,480),(0,0,255),2) 
-            #cv2.line(color_image,(10,470),(10,480),(0,0,255),2) 
-            #cv2.line(color_image,(10,470),(10,480),(0,0,255),2) 
-            #cv2.line(color_image,(10,470),(10,480),(0,0,255),2) 
-            #cv2.line(color_image,(10,470),(10,480),(0,0,255),2) 
-            #cv2.line(color_image,(10,470),(10,480),(0,0,255),2) 
-            #cv2.line(color_image,(10,470),(10,480),(0,0,255),2) 
-            #cv2.line(color_image,(10,470),(10,480),(0,0,255),2) 
-            #cv2.line(color_image,(10,470),(10,480),(0,0,255),2) 
-            #cv2.line(color_image,(10,470),(10,480),(0,0,255),2) 
-            #cv2.line(color_image,(10,470),(10,480),(0,0,255),2) 
- 
-    #convert to gray
+            #depth_colormap_apply = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
+            depth_image_3d = np.dstack((depth_image, depth_image, depth_image))  # depth image is 1 channel, color is 3 channels
+            black=0
+            bg_removed = np.where((depth_image_3d > clipping_distance_behind) | (depth_image_3d <= clipping_distance_front),0,color_image)
+            cv2.namedWindow('bg_removed', cv2.WINDOW_AUTOSIZE)
+            cv2.moveWindow('bg_removed', 2000, 100)
+            cv2.imshow('bg_removed',bg_removed)
+
+
+################image processing
+
+
+
+########################################make mask Bitwise_and
+            color_image,depth_colormap=mask(color_image,depth_colormap)
+#########################################convert to gray
             bg_removed = cv2.cvtColor(bg_removed, cv2.COLOR_BGR2GRAY)
             color_gray=cv2.cvtColor(color_image,cv2.COLOR_BGR2GRAY)
-            cv2.imshow('color_gray',color_gray)
-            color_gray_apply= clahe.apply(color_gray)
-            cv2.imshow('color_gray_apply',color_gray_apply)
-            blur=cv2.bilateralFilter(color_gray_apply,10,10,10)
+            print(color_gray.shape)
+            # add
+            HSV = cv2.cvtColor(color_image, cv2.COLOR_BGR2HSV)
+            h, s, v = cv2.split(HSV)
+            #cv2.imshow('v',v)
+
+            depth_colormap_gray = cv2.cvtColor(depth_colormap, cv2.COLOR_BGR2GRAY)
+            # cv2.imshow('aaaaaaaaaaa',depth_colormap_gray)
+            # depth_colormap=cv2.cvtColor(depth_colormap,cv2.COLOR_BGR2GRAY)
+            #cv2.imshow('1',color_gray)
+###########################################blur
+            blur = cv2.bilateralFilter(v, 10, 10, 10)
+            #blur=cv2.bilateralFilter(color_gray,10,10,10)
             blur_depth=cv2.bilateralFilter(bg_removed,10,10,10)
-            # print('color:'+str(type(color_image))+str(color_image.shape))
-            # print('mask:' + str(type(mask_img))+str(mask_img.shape))
 
+            blur_depth_colormap=cv2.bilateralFilter(depth_colormap_gray,10,10,10)
+            # cv2.imshow('aaaaaaaaaaa',blur_depth_colormap)
 
+            cv2.namedWindow('blur2', cv2.WINDOW_AUTOSIZE)
+            cv2.moveWindow('blur2', 3000, 100)
+            blur_merge=np.hstack((v, blur, blur_depth))
+            cv2.imshow('blur2', blur_merge)
 
             #erode=cv2.erode(blur,kernel_3,iterations = 1)#src, filter_d,sigmacolor,sigmaspace
-            #sharp=cv2.filter2D(bg_removed, -1, kernel_sharpen_3)
-            th2= cv2.adaptiveThreshold(blur,128,cv2.ADAPTIVE_THRESH_MEAN_C,\
-                                      cv2.THRESH_BINARY,blk_size,C)
+            #cv2.imshow('erode',erode)
+            th2= cv2.adaptiveThreshold(blur,240,cv2.ADAPTIVE_THRESH_MEAN_C,\
+                                      cv2.THRESH_BINARY,blk_size,5)
             th2_depth = cv2.adaptiveThreshold(blur_depth, 255, cv2.ADAPTIVE_THRESH_MEAN_C, \
                                         cv2.THRESH_BINARY, blk_size, C)
-            th2_comp=np.hstack((th2,th2_depth))
-            cv2.imshow
+            th2_depth_color = cv2.adaptiveThreshold(blur_depth_colormap, 255, cv2.ADAPTIVE_THRESH_MEAN_C, \
+                                              cv2.THRESH_BINARY, blk_size, C)
+            cv2.imshow("aaaaaaaa",th2_depth_color)
+
+            # th2_comp=np.hstack((th2,th2_depth))
+
+            cv2.namedWindow('th3', cv2.WINDOW_AUTOSIZE)
+            cv2.moveWindow('th3', 2000, 400)
+            th3_merge = np.hstack((th2, th2_depth))
+            cv2.imshow('th3', th3_merge)
+
+#########dil
+            #erosion = cv2.erode(th2, kernel_3, iterations=1)
+            #dilate_color=cv2.dilate(erosion, kernel_5, iterations=1)
+            #cv2.imshow('dilation',dilate_color)
 
             edges=cv2.Canny(th2,200,240)
             edges_depth=cv2.Canny(th2_depth,200,240)
+
+            cv2.namedWindow('edges_comp4', cv2.WINDOW_AUTOSIZE)
+            cv2.moveWindow('edges_comp4', 4000,800)
             edges_comp = np.hstack((edges, edges_depth))
+            cv2.imshow('edges_comp4', edges_comp)
 
-            result = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel_11)
-            cv2.imshow('mop',result)
-            cv2.imshow('edges',edges)
-            ###contour
+            morphol = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel_5)
+            morphol_depth = cv2.morphologyEx(edges_depth, cv2.MORPH_CLOSE, kernel_5)
+            cv2.namedWindow('mpor', cv2.WINDOW_AUTOSIZE)
+            cv2.moveWindow('mpor', 4000,1000)
+            morphol_merge = np.hstack((morphol, morphol_depth))
+            cv2.imshow('mpor', morphol_merge)
 
-            contours, hierarchy = cv2.findContours(result, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+
+#########################contour
+
+            contours, hierarchy = cv2.findContours(morphol, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
             
             total=0
             for cnt in contours:
@@ -285,9 +291,9 @@ def stream(depth,height,width,count):
                 #print(len(approx))
 
                 #cv2.drawContours(color_image, [approx], 0, (0, 255, 255), 2)
-		#bigger box width= 220~240 height=110~130
+		            #large box width= 220~240 height=110~130
                 x, y, w, h = cv2.boundingRect(cnt) #middlie box boundary 145<w<180 85<h<115
-                if 145<w<180 and 85<h<115:
+                if 160<w<200 and 80<h<110:
                     x_center = int(x + w / 2)
                     y_center = int(y + h / 2)
                     dist_to_center = aligned_depth_frame.get_distance(x_center, y_center)
@@ -307,18 +313,18 @@ def stream(depth,height,width,count):
             print('object 갯수:'+ str(total))
 
 
-            contours_d, hierarchy_d = cv2.findContours(th2_depth, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-            # print('asdfasdf'+str(hierarchy))
-            # print('asdfasdf'+str(hierarchy_d))
-            for cnt in contours_d:
-                epsilon = 0.02 * cv2.arcLength(cnt, True)
-                approx = cv2.approxPolyDP(cnt, epsilon, True)
-                # print(len(approx))
-
-                # cv2.drawContours(depth_colormap, [approx], 0, (0, 0, 255), 1)
-                x, y, w, h = cv2.boundingRect(cnt) #output x,y,w,h
-                #if w>100 and h>40:
-                 #   cv2.rectangle(depth_colormap, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            # contours_d, hierarchy_d = cv2.findContours(th2_depth, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+            # # print('asdfasdf'+str(hierarchy))
+            # # print('asdfasdf'+str(hierarchy_d))
+            # for cnt in contours_d:
+            #     epsilon = 0.02 * cv2.arcLength(cnt, True)
+            #     approx = cv2.approxPolyDP(cnt, epsilon, True)
+            #     # print(len(approx))
+            #
+            #     # cv2.drawContours(depth_colormap, [approx], 0, (0, 0, 255), 1)
+            #     x, y, w, h = cv2.boundingRect(cnt) #output x,y,w,h
+            #     #if w>100 and h>40:
+            #      #   cv2.rectangle(depth_colormap, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
 
 
@@ -378,6 +384,7 @@ def stream(depth,height,width,count):
             #         x, y = coner[0]
             #         cv2.circle(color_image, (x, y), 5, (0, 0, 255), 1, cv2.LINE_AA)
 
+
             # Stack both images horizontally
             images = np.hstack((color_image, depth_colormap))
 
@@ -385,21 +392,7 @@ def stream(depth,height,width,count):
             # Show images
             if video_strime:
                 cv2.namedWindow('RealSense', cv2.WINDOW_AUTOSIZE)
-
-
                 cv2.imshow('RealSense', images)
-               #plt.imshow(images)
-               #plt.show()
-                #cv2.imshow('filtered',th2)
-                # cv2.imshow('th2',th2_comp)
-                if depth_colormap_show and depth_image_show:
-                    cv2.imshow('depth_image',depth_image)
-                    cv2.imshow('depth_3d',depth_image_3d)
-                #cv2.imshow('edges1',edges1)
-
-                # cv2.imshow('edges', edges_comp)
-                # cv2.imshow('find_line',find_line)
-                # print(type(filtered)) fliterd <class:frame>
                 cv2.waitKey(1)
             count = total
             i += 1
@@ -449,9 +442,12 @@ if __name__== "__main__":
     if middle_box_bool:
 
         middle_box.width,middle_box.depth,middle_box.height,middle_box.count = 27,18,15,0 #unit:cm
-        #stream(middle_box.width,middle_box.depth,middle_box.height,middle_box.count)
-        get_distance(438, 290)
+        stream(middle_box.width,middle_box.depth,middle_box.height,middle_box.count)
+        # alignDepth2Color()
+        # get_distance(438, 290)
         # stream(ob1.depth,ob1.height,ob1.width,ob1.count)
+### image process
+
 
     #
     # elif b:
