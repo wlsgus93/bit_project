@@ -20,7 +20,20 @@ color_path = NowDate.strftime('%Y-%m-%d_%H%M_'+'.png')
 # 5.2 blur(bilateral) and edge detection
 # 5.3 edge detection (mopology,canny)
 #
+def draw(event, x, y, flags, param):
+    global x1, y1, drawing, mode
 
+    # 왼쪽 마우스 버턴이 눌러졌을 때
+    if event == cv2.EVENT_LBUTTONDOWN:
+        drawing = False
+        (x1, y1) = x, y
+
+    # 마우스가 욺직일때
+    elif event == cv2.EVENT_MOUSEMOVE:
+        drawing = True
+        if drawing == True:
+            if mode == False :
+                cv2.line(img, (x1, y1), (x, y), (255,0,0), 1)
 
 def crop(color_image,depth_colormap,bg_removed,box_model):
     pass
@@ -458,3 +471,71 @@ if __name__== "__main__":
     #     ob3.depth,ob3.height,ob3.width,ob3.count = 26,21.5,39.5,0
     #     stream(ob3.depth, ob3.height, ob3.width, ob3.count)
 
+
+
+
+
+#windowName = 'Drawing'
+#path = './img/_21.png'
+
+#img = cv2.imread(path, cv2.IMREAD_COLOR)
+
+#cv2.namedWindow(windowName)
+
+
+drawing = False
+mode = True
+(x1, y1) = (-1, -1)
+
+
+def draw(event, x, y, flags, param):
+    global x1, y1, drawing, mode
+
+    # 왼쪽 마우스 버턴이 눌러졌을 때
+    if event == cv2.EVENT_LBUTTONDOWN:
+        drawing = False
+        (x1, y1) = x, y
+
+    # 마우스가 움직일때
+    elif event == cv2.EVENT_MOUSEMOVE:
+        drawing = True
+        if drawing == True:
+            if mode == False :
+                cv2.line(img, (x1, y1), (x, y), (0, 255, 0), 1)
+
+    # 왼쪽 마우스를 뗄때....
+    elif event == cv2.EVENT_LBUTTONUP:
+        drawing = False
+        if mode == True:
+            # 사각형 그리기...
+            cv2.line(img, (x1, y1), (x, y), (0,255,0), 1)
+        else:
+            # 원 그리기.... 처음 클릭 좌표와 이동후의 거리를 재서
+            radius = int(sqrt(pow(x - x1, 2) + pow(y - y1, 2)) / 2)
+            cv2.circle(img, (x1, y1), radius, red = (0, 0, 255), -1)
+
+        a = x1 - x  # 선 a의 길이
+        b = y1 - y  # 선 b의 길이
+
+        c = math.sqrt((a * a) + (b * b))
+        print(c)
+
+cv2.setMouseCallback(windowName, draw)
+
+def main():
+    global mode
+
+
+        cv2.imshow(windowName, img)
+
+        key = cv2.waitKey(1)
+        if key == ord('m') or key == ord('M'):
+            mode = not mode
+        elif key == 27:
+            break
+
+
+
+
+# if __name__ == '__main__':
+main()

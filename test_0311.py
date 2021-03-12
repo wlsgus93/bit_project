@@ -219,7 +219,7 @@ def stream(width,depth,height,count):
 #########################################convert to gray
             bg_removed = cv2.cvtColor(bg_removed, cv2.COLOR_BGR2GRAY)
             color_gray=cv2.cvtColor(color_image,cv2.COLOR_BGR2GRAY)
-           
+            print(color_gray.shape)
             # add
             HSV = cv2.cvtColor(color_image, cv2.COLOR_BGR2HSV)
             h, s, v = cv2.split(HSV)
@@ -235,6 +235,7 @@ def stream(width,depth,height,count):
             blur_depth=cv2.bilateralFilter(bg_removed,10,10,10)
 
             blur_depth_colormap=cv2.bilateralFilter(depth_colormap_gray,10,10,10)
+
             # cv2.imshow('aaaaaaaaaaa',blur_depth_colormap)
 
             # cv2.namedWindow('blur2', cv2.WINDOW_AUTOSIZE)
@@ -251,6 +252,16 @@ def stream(width,depth,height,count):
             th2_depth_color = cv2.adaptiveThreshold(blur_depth_colormap, 255, cv2.ADAPTIVE_THRESH_MEAN_C, \
                                               cv2.THRESH_BINARY, blk_size, C)
 
+
+            # test_th2=copy.deepcopy(th2)
+            ################03.12 edge 검출  추가
+            dst=cv2.cvtColor(th2,cv2.COLOR_GRAY2BGR)
+            _,labels,stats,centroids=cv2.connectedComponentsWithStats(th2)
+            print(stats)
+            for a,b,c,d ,cnt in stats:
+                if 100 < c < 155 and 40 < d < 80:
+                    cv2.rectangle(dst,(a,b,c,d),(0,0,255),3)
+            cv2.imshow('dst',dst)
 
             # th2_comp=np.hstack((th2,th2_depth))
 
@@ -293,24 +304,24 @@ def stream(width,depth,height,count):
                 #cv2.drawContours(color_image, [approx], 0, (0, 255, 255), 2)
 		            #large box width= 220~240 height=110~130
                 x, y, w, h = cv2.boundingRect(cnt) #middlie box boundary 145<w<180 85<h<115
-                if 140<w<180 and 80<h<110:
+                if 150<w<180 and 80<h<110:
                     x_center = int(x + w / 2)
                     y_center = int(y + h / 2)
                     dist_to_center = aligned_depth_frame.get_distance(x_center, y_center)
-                    #cv2.rectangle(color_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-                    #cv2.circle(color_image, (x, y), 3, (0, 0, 255))
+                    cv2.rectangle(color_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                    cv2.circle(color_image, (x, y), 3, (0, 0, 255))
                     if object_min_distance<dist_to_center <object_min_distance+object_depth+0.1:
                         total+=2
                     elif object_min_distance+object_depth<dist_to_center <max_distance:
                         total+=1
 
-                    # ('x,y:{0},{1}'.format(x,y))
+                    # print('x,y:{0},{1}'.format(x,y))
 
                     # cv2.circle(color_image, (x,y), 3, (0, 0, 255))
 
                     # print(dist_to_center)
 
-            #print('object 갯수:'+ str(total))
+            print('object 갯수:'+ str(total))
 
 
             # contours_d, hierarchy_d = cv2.findContours(th2_depth, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
